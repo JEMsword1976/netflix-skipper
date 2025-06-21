@@ -3,7 +3,12 @@ const { OAuth2Client } = require('google-auth-library');
 const cors = require('cors');
 
 const app = express();
-app.use(cors()); // 允許跨來源請求
+
+// 更明確的 CORS 設定，允許所有來源
+app.use(cors({
+  origin: '*'
+}));
+
 app.use(express.json());
 
 // 您的 Google Cloud Console Web Client ID
