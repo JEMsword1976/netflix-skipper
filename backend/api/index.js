@@ -2,6 +2,7 @@ const express = require('express');
 const { OAuth2Client } = require('google-auth-library');
 const cors = require('cors');
 const { createClient } = require('@vercel/kv');
+const { Paddle, Environment } = require('@paddle/paddle-node-sdk');
 
 const app = express();
 
@@ -10,12 +11,26 @@ app.use(cors({
   origin: '*'
 }));
 
-app.use(express.json());
+// 注意：webhook 端點需要 raw body，所以全域的 json parser 需要調整
+app.use((req, res, next) => {
+  if (req.path === '/api/paddle-webhook') {
+    // For webhook signature verification, we need the raw request body.
+    express.raw({ type: 'application/json' })(req, res, next);
+  } else {
+    express.json()(req, res, next);
+  }
+});
 
 // 您的 Google Cloud Console Web Client ID
 // **重要**: 請務必在 Vercel 中將此設定為環境變數
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const PADDLE_API_KEY = process.env.PADDLE_API_KEY;
+const PADDLE_WEBHOOK_SECRET = process.env.PADDLE_WEBHOOK_SECRET;
+
 const client = new OAuth2Client(GOOGLE_CLIENT_ID);
+const paddle = new Paddle(PADDLE_API_KEY, {
+  environment: Environment.sandbox, // or Environment.production
+});
 
 // 初始化 Vercel KV 客戶端
 const kv = createClient({
@@ -23,9 +38,64 @@ const kv = createClient({
   token: process.env.KV_REST_API_TOKEN,
 });
 
-const TRIAL_PERIOD_DAYS = 30;
+const TRIAL_PERIOD_DAYS = 30; // This constant is now only for reference, logic is handled by Paddle.
 
-// API 端點：驗證授權
+// [ 新增 ] API 端點：建立 Paddle 付款連結
+app.post('/api/create-payment-link', async (req, res) => {
+  const { userEmail } = req.body;
+  if (!userEmail) {
+    return res.status(400).json({ error: 'User email is required' });
+  }
+
+  try {
+    const transaction = await paddle.transactions.create({
+      items: [{
+        priceId: process.env.PADDLE_PRICE_ID, // 使用環境變數中的 Price ID
+        quantity: 1
+      }],
+      customer: {
+        email: userEmail,
+      },
+      customData: {
+        user_email: userEmail,
+      },
+    });
+
+    res.json({ checkoutUrl: transaction.checkout.url });
+  } catch (error) {
+    console.error('Error creating Paddle transaction:', error);
+    res.status(500).json({ error: 'Failed to create payment link.' });
+  }
+});
+
+// [ 新增 ] API 端點：接收 Paddle Webhook
+app.post('/api/paddle-webhook', async (req, res) => {
+  try {
+    const signature = req.headers['paddle-signature'];
+    const rawBody = req.body;
+    const event = paddle.webhooks.unmarshal(rawBody, PADDLE_WEBHOOK_SECRET, signature);
+
+    // 處理 'transaction.completed' 事件
+    if (event.eventType === 'transaction.completed') {
+      const userEmail = event.data.customData?.user_email;
+      if (userEmail) {
+        let user = await kv.get(userEmail);
+        if (user) {
+          user.license = 'premium';
+          user.paddleTransactionId = event.data.id;
+          await kv.set(userEmail, user);
+          console.log(`User ${userEmail} license upgraded to premium.`);
+        }
+      }
+    }
+    res.status(200).send();
+  } catch (error) {
+    console.error('Error processing Paddle webhook:', error.message);
+    res.status(400).send(`Webhook Error: ${error.message}`);
+  }
+});
+
+// [ 主要邏輯變更 ] API 端點：驗證授權
 app.post('/api/verify-license', async (req, res) => {
     const { token } = req.body;
     const requiredAudience = process.env.GOOGLE_CLIENT_ID;
@@ -54,40 +124,20 @@ app.post('/api/verify-license', async (req, res) => {
         return res.status(400).json({ message: 'Could not extract user email from token' });
     }
 
-    const now = new Date();
     let user = await kv.get(userEmail);
 
     if (!user) {
-        const trialStartDate = now.toISOString();
+        // 新使用者：不再建立試用期，只記錄他們的存在。
         user = {
             email: userEmail,
-            license: 'trial',
-            trialStartDate: trialStartDate
+            license: 'none', // 預設為 'none'
         };
         await kv.set(userEmail, user);
-        console.log(`New user ${userEmail} created with a trial.`);
+        console.log(`New user ${userEmail} created with 'none' license.`);
     }
 
-    // 檢查授權狀態
-    if (user.license === 'premium') {
-        return res.json({ status: 'premium' });
-    }
-
-    // 計算試用期
-    const startDate = new Date(user.trialStartDate);
-    const elapsedMs = now.getTime() - startDate.getTime();
-    const elapsedDays = elapsedMs / (1000 * 60 * 60 * 24);
-    
-    if (elapsedDays < TRIAL_PERIOD_DAYS) {
-        const daysLeft = Math.ceil(TRIAL_PERIOD_DAYS - elapsedDays);
-        return res.json({ status: 'trial', daysLeft: daysLeft });
-    } else {
-        if (user.license !== 'expired') {
-            user.license = 'expired';
-            await kv.set(userEmail, user);
-        }
-        return res.json({ status: 'expired' });
-    }
+    // 只回傳資料庫中記錄的狀態
+    return res.json({ status: user.license });
 });
 
 // 為了讓 Vercel 正確處理，我們匯出 app
