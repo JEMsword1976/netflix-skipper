@@ -25,17 +25,23 @@ const TRIAL_PERIOD_DAYS = 30;
 // API 端點：驗證授權
 app.post('/api/verify-license', async (req, res) => {
     const { token } = req.body;
+    const requiredAudience = process.env.GOOGLE_CLIENT_ID;
 
     if (!token) {
         return res.status(400).json({ message: 'Token is required' });
     }
     
+    if (!requiredAudience) {
+        console.error('FATAL: GOOGLE_CLIENT_ID environment variable not set on Vercel.');
+        return res.status(500).json({ message: 'Server configuration error', details: 'Client ID is not configured on the server.' });
+    }
+
     let userEmail;
 
     try {
         const ticket = await client.verifyIdToken({
             idToken: token,
-            audience: process.env.GOOGLE_CLIENT_ID,
+            audience: requiredAudience,
         });
         const payload = ticket.getPayload();
         userEmail = payload.email;
