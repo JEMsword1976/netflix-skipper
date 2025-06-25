@@ -17,8 +17,8 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Paddle 支援 email 參數自動填入
-  const checkoutUrl = `${PRODUCT_URLS[plan]}?email=${encodeURIComponent(email)}`;
+  const baseUrl = PRODUCT_URLS[plan];
+  const checkoutUrl = baseUrl + (baseUrl.includes('?') ? '&' : '?') + `email=${encodeURIComponent(email)}`;
 
   res.status(200).json({ checkoutUrl });
 } 
