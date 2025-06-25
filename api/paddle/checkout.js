@@ -6,7 +6,7 @@ export default async function handler(req, res) {
 
   const { email, plan } = req.body;
 
-  // 你的 Paddle 產品 checkout base url
+  // Paddle 產品 checkout base url
   const PRODUCT_URLS = {
     monthly: 'https://pay.paddle.io/hsc_01jyb9zsxq51a9v8pzr4negjxt_2edntyz8rzh1yf81rz1s9prm4wx0y9es',
     yearly:  'https://pay.paddle.io/hsc_01jyba1r94k1q663rw4s148g4e_pwjx34dygywtz4bqbhckvgbpxwmxvbs1'
