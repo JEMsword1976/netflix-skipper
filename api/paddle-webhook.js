@@ -44,7 +44,7 @@ export default async function handler(req, res) {
       let user = await redis.get(email);
       if (!user) user = { email };
       user.license = 'premium';
-      await redis.set(email, JSON.stringify(user));
+      await redis.set(email, user);
       console.log('License updated for', email);
     } else {
       console.log('No email found in webhook payload or Paddle API');
