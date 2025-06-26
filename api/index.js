@@ -226,5 +226,50 @@ app.post('/api/verify-license', async (req, res) => {
     return res.json({ status: user.license });
 });
 
+// [ Added ] API endpoint: Create customer portal link
+app.post('/api/create-customer-portal-link', async (req, res) => {
+  const { email } = req.body;
+  
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required' });
+  }
+
+  try {
+    // 首先，我們需要找到該用戶的 customer
+    const customers = await paddle.customers.list({
+      email: email
+    });
+
+    if (!customers.data || customers.data.length === 0) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    const customer = customers.data[0];
+
+    // 創建 customer portal session
+    const customerPortalSession = await paddle.customerPortalSessions.create({
+      customerId: customer.id,
+      returnUrl: 'https://netflix-skipper.vercel.app', // 用戶完成操作後返回的 URL
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24小時後過期
+    });
+
+    // 生成 customer portal 連結
+    const customerPortalUrl = customerPortalSession.url;
+
+    res.json({ 
+      url: customerPortalUrl,
+      customerId: customer.id,
+      expiresAt: customerPortalSession.expiresAt
+    });
+
+  } catch (error) {
+    console.error('Error creating customer portal link:', error);
+    res.status(500).json({ 
+      error: 'Failed to create customer portal link',
+      details: error.message 
+    });
+  }
+});
+
 // Export app for Vercel to handle correctly
 module.exports = app; 
