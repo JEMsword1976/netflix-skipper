@@ -31,8 +31,13 @@ export default async function handler(req, res) {
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    res.status(500).json({ error: 'Failed to create Paddle session', details: error });
+    let errorDetail = '';
+    try {
+      errorDetail = await response.text();
+    } catch (e) {
+      errorDetail = '無法取得詳細錯誤';
+    }
+    res.status(500).json({ error: 'Failed to create Paddle session', details: errorDetail });
     return;
   }
 
