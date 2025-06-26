@@ -4,13 +4,21 @@ const redis = Redis.fromEnv();
 
 export default async function handler(req, res) {
   const event = req.body;
-  console.log('Paddle webhook received:', event);
+  console.log('Webhook event:', JSON.stringify(event, null, 2));
 
   if (event.event_type === 'transaction.completed') {
-    // 假設 email 在 event.data.customer.email
-    const email = event.data?.customer?.email;
+    // 嘗試多種方式取得 email
+    let email = event.data?.customer?.email;
+    if (!email && event.data?.items?.[0]?.customer?.email) {
+      email = event.data.items[0].customer.email;
+    }
+    if (!email && event.data?.email) {
+      email = event.data.email;
+    }
+    if (!email && event.data?.items?.[0]?.email) {
+      email = event.data.items[0].email;
+    }
     if (email) {
-      // 取得現有資料
       let user = await redis.get(email);
       if (!user) user = { email };
       user.license = 'premium';
