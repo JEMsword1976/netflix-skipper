@@ -1,9 +1,3 @@
-import { Paddle } from '@paddle/paddle-node-sdk';
-
-const paddle = new Paddle(process.env.PADDLE_API_KEY, {
-  environment: process.env.PADDLE_ENV === 'production' ? 'production' : 'sandbox',
-});
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
@@ -13,12 +7,25 @@ export default async function handler(req, res) {
   if (!email) return res.status(400).json({ error: 'Missing email' });
 
   try {
-    const session = await paddle.portal.sessions.create({
-      customer: { email }
+    const paddleRes = await fetch('https://api.paddle.com/portal/sessions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.PADDLE_API_KEY}`
+      },
+      body: JSON.stringify({
+        customer: { email }
+      })
     });
-    res.json({ url: session.url });
+    const data = await paddleRes.json();
+    if (data?.data?.url) {
+      res.json({ url: data.data.url });
+    } else {
+      console.error('Paddle portal API error:', data);
+      res.status(500).json({ error: 'Failed to get portal url', details: data });
+    }
   } catch (e) {
-    console.error('Create portal session error:', e, e?.response?.data);
-    res.status(500).json({ error: 'Failed to create portal session', details: e.message, stack: e.stack, paddle: e?.response?.data });
+    console.error('Create portal session error:', e);
+    res.status(500).json({ error: 'Failed to create portal session', details: e.message });
   }
 } 
