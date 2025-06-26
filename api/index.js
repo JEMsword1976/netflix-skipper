@@ -195,6 +195,8 @@ app.post('/api/check-license-status', async (req, res) => {
 
 // [ Main logic change ] API endpoint: Verify license
 app.post('/api/verify-license', async (req, res) => {
+    console.log('verify-license req.body:', req.body);
+    console.log('GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID);
     const { token } = req.body;
     const requiredAudience = process.env.GOOGLE_CLIENT_ID;
 
