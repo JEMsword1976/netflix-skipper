@@ -196,48 +196,33 @@ app.post('/api/check-license-status', async (req, res) => {
 // [ Main logic change ] API endpoint: Verify license
 app.post('/api/verify-license', async (req, res) => {
     console.log('verify-license req.body:', req.body);
-    console.log('GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID);
     const { token } = req.body;
     const requiredAudience = process.env.GOOGLE_CLIENT_ID;
-
     if (!token) {
+        console.log('No token provided');
         return res.status(400).json({ message: 'Token is required' });
     }
-    
-    if (!requiredAudience || !process.env.KV_REST_API_URL) {
-        const missingVar = !requiredAudience ? 'GOOGLE_CLIENT_ID' : 'Vercel KV';
-        console.error(`FATAL: ${missingVar} environment variable not set on Vercel.`);
-        return res.status(500).json({ message: 'Server configuration error', details: `${missingVar} is not configured on the server.` });
-    }
-
     let userEmail;
     try {
         const ticket = await client.verifyIdToken({ idToken: token, audience: requiredAudience });
         const payload = ticket.getPayload();
         userEmail = payload.email;
+        console.log('Google token valid, userEmail:', userEmail);
     } catch (error) {
         console.error('Error verifying Google token:', error);
         return res.status(401).json({ message: 'Invalid Google token', details: error.message });
     }
-
     if (!userEmail) {
+        console.log('No userEmail extracted from token');
         return res.status(400).json({ message: 'Could not extract user email from token' });
     }
-
     let user = await kv.get(userEmail);
-
+    console.log('DB user:', user);
     if (!user) {
-        // If user doesn't exist in database (theoretically shouldn't happen after login, but as protection)
-        // Directly create them as 'none' status, no longer giving server-side trial period.
-        user = {
-            email: userEmail,
-            license: 'none',
-        };
+        user = { email: userEmail, license: 'none' };
         await kv.set(userEmail, user);
         console.log(`A user (${userEmail}) not found in DB was created with 'none' license.`);
     }
-
-    // Only return the status recorded in database
     return res.json({ status: user.license });
 });
 
