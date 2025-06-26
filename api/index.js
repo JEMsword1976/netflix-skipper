@@ -29,7 +29,7 @@ const PADDLE_WEBHOOK_SECRET = process.env.PADDLE_WEBHOOK_SECRET;
 
 const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 const paddle = new Paddle(PADDLE_API_KEY, {
-  environment: Environment.sandbox, // or Environment.production
+  environment: process.env.NODE_ENV === 'production' ? Environment.production : Environment.sandbox,
 });
 
 // Initialize Vercel KV client
@@ -228,33 +228,50 @@ app.post('/api/verify-license', async (req, res) => {
 
 // [ Added ] API endpoint: Create customer portal link
 app.post('/api/create-customer-portal-link', async (req, res) => {
+  console.log('create-customer-portal-link called with body:', req.body);
   const { email } = req.body;
   
   if (!email) {
+    console.log('No email provided');
     return res.status(400).json({ error: 'Email is required' });
   }
 
+  console.log('Looking for customer with email:', email);
+
   try {
     // 首先，我們需要找到該用戶的 customer
+    console.log('Calling paddle.customers.list...');
     const customers = await paddle.customers.list({
       email: email
     });
 
+    console.log('Paddle customers response:', customers);
+
     if (!customers.data || customers.data.length === 0) {
-      return res.status(404).json({ error: 'Customer not found' });
+      console.log('No customer found for email:', email);
+      return res.status(404).json({ 
+        error: 'Customer not found in Paddle',
+        message: 'This email address is not associated with any Paddle customer account.'
+      });
     }
 
     const customer = customers.data[0];
+    console.log('Found customer:', customer.id);
 
     // 創建 customer portal session
+    console.log('Creating customer portal session...');
     const customerPortalSession = await paddle.customerPortalSessions.create({
       customerId: customer.id,
       returnUrl: 'https://netflix-skipper.vercel.app', // 用戶完成操作後返回的 URL
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24小時後過期
     });
 
+    console.log('Customer portal session created:', customerPortalSession);
+
     // 生成 customer portal 連結
     const customerPortalUrl = customerPortalSession.url;
+
+    console.log('Returning portal URL:', customerPortalUrl);
 
     res.json({ 
       url: customerPortalUrl,
@@ -264,9 +281,67 @@ app.post('/api/create-customer-portal-link', async (req, res) => {
 
   } catch (error) {
     console.error('Error creating customer portal link:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      status: error.status
+    });
+    
+    // 提供更具體的錯誤訊息
+    let errorMessage = 'Failed to create customer portal link';
+    let errorDetails = error.message;
+    
+    if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+      errorMessage = 'Paddle API authentication failed';
+      errorDetails = 'Please check your Paddle API key configuration';
+    } else if (error.message.includes('404') || error.message.includes('Not Found')) {
+      errorMessage = 'Customer not found';
+      errorDetails = 'This email address is not associated with any Paddle customer account';
+    } else if (error.message.includes('429') || error.message.includes('Rate Limited')) {
+      errorMessage = 'Too many requests';
+      errorDetails = 'Please try again in a few minutes';
+    }
+    
     res.status(500).json({ 
-      error: 'Failed to create customer portal link',
-      details: error.message 
+      error: errorMessage,
+      details: errorDetails,
+      originalError: error.message
+    });
+  }
+});
+
+// [ Added ] Test endpoint: Check Paddle API connection
+app.get('/api/test-paddle-connection', async (req, res) => {
+  try {
+    console.log('Testing Paddle API connection...');
+    console.log('Paddle API Key exists:', !!process.env.PADDLE_API_KEY);
+    console.log('Paddle environment:', process.env.NODE_ENV === 'production' ? 'production' : 'sandbox');
+    
+    // 測試基本的 API 連接
+    const customers = await paddle.customers.list({
+      limit: 1
+    });
+    
+    console.log('Paddle API test successful');
+    
+    res.json({
+      success: true,
+      message: 'Paddle API connection successful',
+      environment: process.env.NODE_ENV === 'production' ? 'production' : 'sandbox',
+      apiKeyExists: !!process.env.PADDLE_API_KEY,
+      customersCount: customers.data ? customers.data.length : 0
+    });
+    
+  } catch (error) {
+    console.error('Paddle API test failed:', error);
+    
+    res.status(500).json({
+      success: false,
+      error: 'Paddle API connection failed',
+      details: error.message,
+      environment: process.env.NODE_ENV === 'production' ? 'production' : 'sandbox',
+      apiKeyExists: !!process.env.PADDLE_API_KEY
     });
   }
 });
