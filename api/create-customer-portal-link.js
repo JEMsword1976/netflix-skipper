@@ -18,6 +18,7 @@ export default async function handler(req, res) {
     });
     res.json({ url: session.url });
   } catch (e) {
-    res.status(500).json({ error: 'Failed to create portal session', details: e.message });
+    console.error('Create portal session error:', e, e?.response?.data);
+    res.status(500).json({ error: 'Failed to create portal session', details: e.message, stack: e.stack, paddle: e?.response?.data });
   }
 } 
