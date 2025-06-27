@@ -39,14 +39,26 @@ module.exports = async (req, res) => {
       })
     });
     const portalData = await portalRes.json();
-    res.json({
-      customerId: customer.id,
-      email: customer.email,
-      status: customer.status,
-      portalUrl: portalData.data?.url || null,
-      portalDebug: portalData,
-      raw: customer
-    });
+    const portalUrl = portalData?.data?.url;
+    if (portalUrl) {
+      // 僅回傳 url 給前端，並保留 debug 欄位
+      return res.status(200).json({
+        url: portalUrl,
+        customerId: customer.id,
+        email: customer.email,
+        status: customer.status,
+        debug: portalData
+      });
+    } else {
+      // 若無 url，回傳 500 並附上 debug
+      return res.status(500).json({
+        error: 'No URL returned from Paddle',
+        customerId: customer.id,
+        email: customer.email,
+        status: customer.status,
+        debug: portalData
+      });
+    }
   } catch (error) {
     res.status(500).json({
       error: 'Failed to create customer portal link',
