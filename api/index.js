@@ -3,6 +3,7 @@ const { OAuth2Client } = require('google-auth-library');
 const cors = require('cors');
 const { createClient } = require('@vercel/kv');
 const { Paddle, Environment } = require('@paddle/paddle-node-sdk');
+const fetch = require('node-fetch');
 
 const app = express();
 
@@ -239,74 +240,33 @@ app.post('/api/create-customer-portal-link', async (req, res) => {
   console.log('Looking for customer with email:', email);
 
   try {
-    // 首先，我們需要找到該用戶的 customer
-    console.log('Calling paddle.customers.list...');
-    const customers = await paddle.customers.list({
-      email: email
+    const searchEmail = email.trim().toLowerCase();
+    const response = await fetch(`https://api.paddle.com/customers?email=${encodeURIComponent(searchEmail)}`, {
+      headers: {
+        'Authorization': `Bearer ${process.env.PADDLE_API_KEY}`
+      }
     });
-
-    console.log('Paddle customers response:', customers);
-
-    if (!customers.data || customers.data.length === 0) {
-      console.log('No customer found for email:', email);
+    const data = await response.json();
+    if (!data.data || data.data.length === 0) {
+      // 這裡回傳所有 debug 資訊
       return res.status(404).json({ 
-        error: 'Customer not found in Paddle',
-        message: 'This email address is not associated with any Paddle customer account.'
+        error: 'Customer not found in Paddle', 
+        searchEmail, 
+        apiKeyHead: process.env.PADDLE_API_KEY?.slice(0, 12),
+        paddleResponse: data
       });
     }
-
-    const customer = customers.data[0];
-    console.log('Found customer:', customer.id);
-
-    // 創建 customer portal session
-    console.log('Creating customer portal session...');
-    const customerPortalSession = await paddle.customerPortalSessions.create({
+    const customer = data.data[0];
+    res.json({
       customerId: customer.id,
-      returnUrl: 'https://netflix-skipper.vercel.app', // 用戶完成操作後返回的 URL
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24小時後過期
+      email: customer.email,
+      status: customer.status,
+      raw: customer
     });
-
-    console.log('Customer portal session created:', customerPortalSession);
-
-    // 生成 customer portal 連結
-    const customerPortalUrl = customerPortalSession.url;
-
-    console.log('Returning portal URL:', customerPortalUrl);
-
-    res.json({ 
-      url: customerPortalUrl,
-      customerId: customer.id,
-      expiresAt: customerPortalSession.expiresAt
-    });
-
   } catch (error) {
-    console.error('Error creating customer portal link:', error);
-    console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
-      code: error.code,
-      status: error.status
-    });
-    
-    // 提供更具體的錯誤訊息
-    let errorMessage = 'Failed to create customer portal link';
-    let errorDetails = error.message;
-    
-    if (error.message.includes('401') || error.message.includes('Unauthorized')) {
-      errorMessage = 'Paddle API authentication failed';
-      errorDetails = 'Please check your Paddle API key configuration';
-    } else if (error.message.includes('404') || error.message.includes('Not Found')) {
-      errorMessage = 'Customer not found';
-      errorDetails = 'This email address is not associated with any Paddle customer account';
-    } else if (error.message.includes('429') || error.message.includes('Rate Limited')) {
-      errorMessage = 'Too many requests';
-      errorDetails = 'Please try again in a few minutes';
-    }
-    
-    res.status(500).json({ 
-      error: errorMessage,
-      details: errorDetails,
-      originalError: error.message
+    res.status(500).json({
+      error: 'Failed to create customer portal link',
+      details: typeof error === 'object' ? JSON.stringify(error, null, 2) : String(error),
     });
   }
 });
