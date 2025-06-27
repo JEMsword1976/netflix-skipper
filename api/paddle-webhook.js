@@ -44,10 +44,83 @@ export default async function handler(req, res) {
       let user = await redis.get(email);
       if (!user) user = { email };
       user.license = 'premium';
+
+      // 新增：根據 Paddle 方案 ID 寫入 subscriptionStatus
+      let planId = event.data?.items?.[0]?.price?.product_id || event.data?.product_id;
+      if (planId === 'pri_01jyb06mcbg2hqsp64mwth8em1') {
+        user.subscriptionStatus = 'monthly';
+      } else if (planId === 'pri_01jyb32gjsmvf819q2s04hqvr7') {
+        user.subscriptionStatus = 'yearly';
+      } else {
+        user.subscriptionStatus = 'active'; // 預設
+      }
+
       await redis.set(email, user);
-      console.log('License updated for', email);
+      console.log('License & subscriptionStatus updated for', email, user.subscriptionStatus);
     } else {
       console.log('No email found in webhook payload or Paddle API');
+    }
+  }
+
+  // 處理訂閱取消
+  if (event.event_type === 'subscription.cancelled') {
+    let email = null;
+    if (event.data?.customer?.email) email = event.data.customer.email;
+    if (!email && event.data?.email) email = event.data.email;
+    if (email) {
+      let user = await redis.get(email);
+      if (!user) user = { email };
+      user.license = 'none';
+      user.subscriptionStatus = 'cancelled';
+      await redis.set(email, user);
+      console.log('Subscription cancelled for', email);
+    }
+  }
+
+  // 處理訂閱過期
+  if (event.event_type === 'subscription.expired') {
+    let email = null;
+    if (event.data?.customer?.email) email = event.data.customer.email;
+    if (!email && event.data?.email) email = event.data.email;
+    if (email) {
+      let user = await redis.get(email);
+      if (!user) user = { email };
+      user.license = 'none';
+      user.subscriptionStatus = 'expired';
+      await redis.set(email, user);
+      console.log('Subscription expired for', email);
+    }
+  }
+
+  // 處理訂閱更新
+  if (event.event_type === 'subscription.updated') {
+    let email = null;
+    if (event.data?.customer?.email) email = event.data.customer.email;
+    if (!email && event.data?.email) email = event.data.email;
+    if (email) {
+      let user = await redis.get(email);
+      if (!user) user = { email };
+      // 根據狀態更新
+      let status = event.data?.status;
+      if (status === 'active') {
+        user.license = 'premium';
+        let planId = event.data?.items?.[0]?.price?.product_id || event.data?.product_id;
+        if (planId === 'pri_01jyb06mcbg2hqsp64mwth8em1') {
+          user.subscriptionStatus = 'monthly';
+        } else if (planId === 'pri_01jyb32gjsmvf819q2s04hqvr7') {
+          user.subscriptionStatus = 'yearly';
+        } else {
+          user.subscriptionStatus = 'active';
+        }
+      } else if (status === 'cancelled') {
+        user.license = 'none';
+        user.subscriptionStatus = 'cancelled';
+      } else if (status === 'expired') {
+        user.license = 'none';
+        user.subscriptionStatus = 'expired';
+      }
+      await redis.set(email, user);
+      console.log('Subscription updated for', email, user.subscriptionStatus);
     }
   }
 
