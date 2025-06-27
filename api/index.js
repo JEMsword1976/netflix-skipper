@@ -248,7 +248,7 @@ app.post('/api/create-customer-portal-link', async (req, res) => {
     });
     const data = await response.json();
     if (!data.data || data.data.length === 0) {
-      // 這裡回傳所有 debug 資訊
+      // 務必回傳完整 debug 資訊
       return res.status(404).json({ 
         error: 'Customer not found in Paddle', 
         searchEmail, 
