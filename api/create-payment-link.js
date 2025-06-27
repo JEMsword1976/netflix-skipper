@@ -1,4 +1,9 @@
 const fetch = require('node-fetch');
+const { Paddle, Environment } = require('@paddle/paddle-node-sdk');
+
+const paddle = new Paddle(process.env.PADDLE_API_KEY, {
+  environment: Environment.production,
+});
 
 module.exports = async (req, res) => {
   console.log('API function called', new Date().toISOString());
@@ -14,17 +19,16 @@ module.exports = async (req, res) => {
     console.log('收到 email:', email);
     console.log('查詢 email:', searchEmail);
     console.log('API Key Head:', process.env.PADDLE_API_KEY?.slice(0, 12));
-    const response = await fetch(`https://api.paddle.com/customers?email=${encodeURIComponent(searchEmail)}`, {
-      headers: {
-        'Authorization': `Bearer ${process.env.PADDLE_API_KEY}`
-      }
-    });
-    const data = await response.json();
-    console.log('Paddle API 回傳:', JSON.stringify(data));
-    if (!data.data || data.data.length === 0) {
-      return res.status(404).json({ error: 'Customer not found in Paddle', searchEmail });
+    const customers = await paddle.customers.list({ email: searchEmail });
+    if (!customers.data || customers.data.length === 0) {
+      return res.status(404).json({ 
+        error: 'Customer not found in Paddle', 
+        searchEmail, 
+        apiKeyHead: process.env.PADDLE_API_KEY?.slice(0, 12),
+        paddleResponse: customers
+      });
     }
-    const customer = data.data[0];
+    const customer = customers.data[0];
     // 這裡你可以繼續用 fetch 呼叫 customer portal session API
     res.json({
       customerId: customer.id,
