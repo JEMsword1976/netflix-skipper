@@ -1,8 +1,4 @@
-const { Paddle, Environment } = require('@paddle/paddle-node-sdk');
-
-const paddle = new Paddle(process.env.PADDLE_API_KEY, {
-  environment: Environment.production, // 這裡一定要 production
-});
+const fetch = require('node-fetch');
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -13,20 +9,28 @@ module.exports = async (req, res) => {
     return res.status(400).json({ error: 'Email is required' });
   }
   try {
-    const customers = await paddle.customers.list({ email });
-    if (!customers.data || customers.data.length === 0) {
-      return res.status(404).json({ error: 'Customer not found in Paddle' });
-    }
-    const customer = customers.data[0];
-    const customerPortalSession = await paddle.customerPortalSessions.create({
-      customerId: customer.id,
-      returnUrl: 'https://netflix-skipper.vercel.app',
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    const searchEmail = email.trim().toLowerCase();
+    const response = await fetch(`https://api.paddle.com/customers?email=${encodeURIComponent(searchEmail)}`, {
+      headers: {
+        'Authorization': `Bearer ${process.env.PADDLE_API_KEY}`
+      }
     });
+    const data = await response.json();
+    if (!data.data || data.data.length === 0) {
+      // 務必回傳完整 debug 資訊
+      return res.status(404).json({ 
+        error: 'Customer not found in Paddle', 
+        searchEmail, 
+        apiKeyHead: process.env.PADDLE_API_KEY?.slice(0, 12),
+        paddleResponse: data
+      });
+    }
+    const customer = data.data[0];
     res.json({
-      url: customerPortalSession.url,
       customerId: customer.id,
-      expiresAt: customerPortalSession.expiresAt,
+      email: customer.email,
+      status: customer.status,
+      raw: customer
     });
   } catch (error) {
     res.status(500).json({
