@@ -1,4 +1,5 @@
 const { Paddle, Environment } = require('@paddle/paddle-node-sdk');
+const fetch = require('node-fetch');
 
 const paddle = new Paddle(process.env.PADDLE_API_KEY, {
   environment: Environment.production,
@@ -14,15 +15,20 @@ module.exports = async (req, res) => {
   }
   try {
     const searchEmail = email.trim().toLowerCase();
-    const customers = await paddle.customers.list({ email: searchEmail });
-    if (!customers.data || customers.data.length === 0) {
+    const response = await fetch(`https://api.paddle.com/customers?email=${encodeURIComponent(searchEmail)}`, {
+      headers: {
+        'Authorization': `Bearer ${process.env.PADDLE_API_KEY}`
+      }
+    });
+    const data = await response.json();
+    if (!data.data || data.data.length === 0) {
       return res.status(404).json({ 
         error: 'Customer not found in Paddle', 
         searchEmail, 
         apiKeyHead: process.env.PADDLE_API_KEY?.slice(0, 12) 
       });
     }
-    const customer = customers.data[0];
+    const customer = data.data[0];
     const customerPortalSession = await paddle.customerPortalSessions.create({
       customerId: customer.id,
       returnUrl: 'https://netflix-skipper.vercel.app',
