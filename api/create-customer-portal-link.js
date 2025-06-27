@@ -27,15 +27,14 @@ module.exports = async (req, res) => {
       });
     }
     const customer = data.data[0];
-    // 2. 產生 customer portal session
-    const portalRes = await fetch('https://api.paddle.com/customer-portal-sessions', {
+    // 2. 產生 customer portal session (正確 endpoint)
+    const portalRes = await fetch(`https://api.paddle.com/customers/${customer.id}/portal-link`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.PADDLE_API_KEY}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        customer_id: customer.id,
         return_url: 'https://netflix-skipper.vercel.app'
       })
     });
@@ -54,4 +53,4 @@ module.exports = async (req, res) => {
       details: typeof error === 'object' ? JSON.stringify(error, null, 2) : String(error),
     });
   }
-}; 
+};
