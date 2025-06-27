@@ -143,15 +143,22 @@ app.post('/api/check-license-status', async (req, res) => {
     const ticket = await client.verifyIdToken({ idToken: token, audience: requiredAudience });
     const payload = ticket.getPayload();
     userEmail = payload.email;
+    console.log('userEmail:', userEmail);
   } catch (error) {
     console.error('Error verifying Google token:', error);
     return res.status(401).json({ message: 'Invalid Google token', details: error.message });
   }
 
   let user = await kv.get(userEmail);
+  console.log('user from kv:', user);
   if (!user) {
     return res.status(404).json({ message: 'User not found' });
   }
+
+  if (typeof user === 'string') {
+    user = JSON.parse(user);
+  }
+  console.log('license:', user.license, 'subscriptionStatus:', user.subscriptionStatus);
 
   // [ Added ] Check subscription status
   let needsUpdate = false;
