@@ -29,6 +29,7 @@ module.exports = async (req, res) => {
       customerId: customer.id,
       expiresAt: customerPortalSession.expiresAt,
     });
+    console.error('查詢 email:', searchEmail);
   } catch (error) {
     console.error('查詢 email:', email);
     console.error('API Key 前6:', process.env.PADDLE_API_KEY?.slice(0, 6));
