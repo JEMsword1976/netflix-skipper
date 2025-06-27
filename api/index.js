@@ -131,10 +131,13 @@ app.post('/api/paddle-webhook', async (req, res) => {
 
 // [ Added ] API endpoint: Check license status (for periodic checking)
 app.post('/api/check-license-status', async (req, res) => {
+  console.log('--- /api/check-license-status called ---');
   const { token } = req.body;
+  console.log('Received token:', token);
   const requiredAudience = process.env.GOOGLE_CLIENT_ID;
 
   if (!token) {
+    console.log('No token provided');
     return res.status(400).json({ message: 'Token is required' });
   }
 
@@ -152,11 +155,13 @@ app.post('/api/check-license-status', async (req, res) => {
   let user = await kv.get(userEmail);
   console.log('user from kv:', user);
   if (!user) {
+    console.log('User not found in DB for:', userEmail);
     return res.status(404).json({ message: 'User not found' });
   }
 
   if (typeof user === 'string') {
     user = JSON.parse(user);
+    console.log('Parsed user:', user);
   }
   console.log('license:', user.license, 'subscriptionStatus:', user.subscriptionStatus);
 
@@ -193,12 +198,18 @@ app.post('/api/check-license-status', async (req, res) => {
     await kv.set(userEmail, user);
   }
 
-  return res.json({ 
+  const result = {
     status: user.license,
     subscriptionStatus: user.subscriptionStatus || 'none',
     lastPaymentDate: user.lastPaymentDate,
-    needsRenewal: user.subscriptionStatus === 'past_due' || user.subscriptionStatus === 'expired'
-  });
+    needsRenewal: user.subscriptionStatus === 'past_due' || user.subscriptionStatus === 'expired',
+    debug: {
+      userEmail,
+      userFromKv: user
+    }
+  };
+  console.log('Response:', result);
+  return res.json(result);
 });
 
 // [ Main logic change ] API endpoint: Verify license
