@@ -16,7 +16,11 @@ module.exports = async (req, res) => {
     const searchEmail = email.trim().toLowerCase();
     const customers = await paddle.customers.list({ email: searchEmail });
     if (!customers.data || customers.data.length === 0) {
-      return res.status(404).json({ error: 'Customer not found in Paddle', searchEmail });
+      return res.status(404).json({ 
+        error: 'Customer not found in Paddle', 
+        searchEmail, 
+        apiKeyHead: process.env.PADDLE_API_KEY?.slice(0, 12) 
+      });
     }
     const customer = customers.data[0];
     const customerPortalSession = await paddle.customerPortalSessions.create({
