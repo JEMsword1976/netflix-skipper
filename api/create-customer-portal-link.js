@@ -34,9 +34,7 @@ module.exports = async (req, res) => {
         'Authorization': `Bearer ${process.env.PADDLE_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        return_url: 'https://netflix-skipper.vercel.app'
-      })
+      body: JSON.stringify({})
     });
     const portalData = await portalRes.json();
     const portalUrl = portalData?.data?.url;
