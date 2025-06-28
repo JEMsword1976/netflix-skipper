@@ -129,8 +129,10 @@ export default async function handler(req, res) {
       await updateUserStatus(email, {
         license: 'premium',
         subscriptionStatus: subscriptionStatus,
-        trialStartDate: event.data?.items?.[0]?.trial_dates?.starts_at,
-        trialEndDate: event.data?.items?.[0]?.trial_dates?.ends_at,
+        trialStartDate: event.data?.items?.[0]?.trial_dates?.starts_at || '',
+        trialEndDate: event.data?.items?.[0]?.trial_dates?.ends_at || '',
+        nextBilledAt: event.data?.next_billed_at || event.data?.items?.[0]?.next_billed_at || '',
+        scheduledChange: event.data?.scheduled_change || {},
         lastUpdated: new Date().toISOString()
       });
     } else if (status === 'cancelled') {

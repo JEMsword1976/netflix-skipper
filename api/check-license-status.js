@@ -31,6 +31,13 @@ export default async function handler(req, res) {
     status: user.license,
     subscriptionStatus: user.subscriptionStatus || 'none',
     lastPaymentDate: user.lastPaymentDate,
+    nextBilledAt: user.nextBilledAt,
+    scheduledChange: user.scheduledChange,
+    trialEndDate: user.trialEndDate,
+    trialStartDate: user.trialStartDate,
+    cancelledDate: user.cancelledDate,
+    expiredDate: user.expiredDate,
+    pastDueDate: user.pastDueDate,
     needsRenewal: user.subscriptionStatus === 'past_due' || user.subscriptionStatus === 'expired',
     debug: {
       userEmail,
