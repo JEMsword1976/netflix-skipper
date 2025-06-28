@@ -119,19 +119,19 @@ export default async function handler(req, res) {
     const email = getEmailFromEvent(event);
     const status = event.data?.status;
     
-    if (status === 'active') {
+    if (status === 'active' || status === 'trialing') {
       let planId = event.data?.items?.[0]?.price?.product_id || event.data?.product_id;
       let subscriptionStatus = 'active';
-      
       if (planId === 'pri_01jyb06mcbg2hqsp64mwth8em1') {
         subscriptionStatus = 'monthly';
       } else if (planId === 'pri_01jyb32gjsmvf819q2s04hqvr7') {
         subscriptionStatus = 'yearly';
       }
-
       await updateUserStatus(email, {
         license: 'premium',
         subscriptionStatus: subscriptionStatus,
+        trialStartDate: event.data?.items?.[0]?.trial_dates?.starts_at,
+        trialEndDate: event.data?.items?.[0]?.trial_dates?.ends_at,
         lastUpdated: new Date().toISOString()
       });
     } else if (status === 'cancelled') {
