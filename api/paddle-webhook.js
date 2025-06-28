@@ -20,8 +20,8 @@ export default async function handler(req, res) {
 
   console.log('Webhook event received:', event.event_type, JSON.stringify(event, null, 2));
 
-  // 統一獲取用戶 email 的函數
-  const getEmailFromEvent = (event) => {
+  // 統一獲取用戶 email 的函數（改為 async，支援 customer_id 查詢）
+  const getEmailFromEvent = async (event) => {
     let email = null;
     // 1. 先嘗試直接抓 email
     if (event.data?.customer?.email) email = event.data.customer.email;
@@ -29,6 +29,19 @@ export default async function handler(req, res) {
     if (!email && event.data?.email) email = event.data.email;
     if (!email && event.data?.items?.[0]?.email) email = event.data.items[0].email;
     if (!email && event.data?.customData?.user_email) email = event.data.customData.user_email;
+    // 2. 新增：若還是沒有，嘗試用 customer_id 查詢 Paddle API
+    if (!email && event.data?.customer_id) {
+      try {
+        const paddleRes = await fetch(`https://api.paddle.com/customers/${event.data.customer_id}`, {
+          headers: { 'Authorization': `Bearer ${process.env.PADDLE_API_KEY}` }
+        });
+        const paddleData = await paddleRes.json();
+        email = paddleData?.data?.email;
+        console.log('Fetched email from Paddle API:', email);
+      } catch (e) {
+        console.log('Fetch Paddle customer error:', e);
+      }
+    }
     return email;
   };
 
@@ -56,22 +69,8 @@ export default async function handler(req, res) {
   };
 
   if (event.event_type === 'transaction.completed') {
-    let email = getEmailFromEvent(event);
+    let email = await getEmailFromEvent(event);
     
-    // 2. 若還是沒有，嘗試用 customer_id 查詢 Paddle API
-    if (!email && event.data?.customer_id) {
-      try {
-        const paddleRes = await fetch(`https://api.paddle.com/customers/${event.data.customer_id}`, {
-          headers: { 'Authorization': `Bearer ${process.env.PADDLE_API_KEY}` }
-        });
-        const paddleData = await paddleRes.json();
-        email = paddleData?.data?.email;
-        console.log('Fetched email from Paddle API:', email);
-      } catch (e) {
-        console.log('Fetch Paddle customer error:', e);
-      }
-    }
-
     if (email) {
       // 根據 Paddle 方案 ID 寫入 subscriptionStatus
       let planId = event.data?.items?.[0]?.price?.product_id || event.data?.product_id;
@@ -96,7 +95,7 @@ export default async function handler(req, res) {
 
   // 處理訂閱取消
   if (event.event_type === 'subscription.cancelled') {
-    const email = getEmailFromEvent(event);
+    const email = await getEmailFromEvent(event);
     await updateUserStatus(email, {
       license: 'none',
       subscriptionStatus: 'cancelled',
@@ -106,7 +105,7 @@ export default async function handler(req, res) {
 
   // 處理訂閱過期
   if (event.event_type === 'subscription.expired') {
-    const email = getEmailFromEvent(event);
+    const email = await getEmailFromEvent(event);
     await updateUserStatus(email, {
       license: 'none',
       subscriptionStatus: 'expired',
@@ -116,7 +115,7 @@ export default async function handler(req, res) {
 
   // 處理訂閱更新
   if (event.event_type === 'subscription.updated') {
-    const email = getEmailFromEvent(event);
+    const email = await getEmailFromEvent(event);
     const status = event.data?.status;
     
     if (status === 'active' || status === 'trialing') {
