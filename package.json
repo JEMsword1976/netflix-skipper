@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "@upstash/redis": "^1.35.0"
+    "@upstash/redis": "^1.35.0",
+    "google-auth-library": "^10.1.0"
   }
 }
